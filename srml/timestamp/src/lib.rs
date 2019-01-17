@@ -85,7 +85,7 @@ pub trait Trait: consensus::Trait + system::Trait {
 	const TIMESTAMP_SET_POSITION: u32;
 
 	/// Type used for expressing timestamp.
-	type Moment: Parameter + Default + SimpleArithmetic + Mul<Self::BlockNumber, Output = Self::Moment> + Div<Self::BlockNumber, Output = Self::Moment>;
+	type Moment: Parameter + Default + SimpleArithmetic + Mul<Self::BlockNumber, Output = Self::Moment> + Div<Self::BlockNumber, Output = Self::Moment> + HasCompact;
 	/// Something which can be notified when the timestamp is set. Set this to `()` if not needed.
 	type OnTimestampSet: OnTimestampSet<Self::Moment>;
 }
@@ -100,10 +100,8 @@ decl_module! {
 		/// if this call hasn't been invoked by that time.
 		///
 		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-		fn set(origin, now: <T::Moment as HasCompact>::Type) {
+		fn set(origin, #[codec(compact)] now: T::Moment) {
 			ensure_inherent(origin)?;
-			let now = now.into();
-
 			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 			assert!(
 				<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
@@ -175,7 +173,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		let t = match (xt.is_signed(), extract_function(&xt)) {
 			(Some(false), Some(Call::set(ref t))) => t.clone(),
 			_ => return Err(CheckInherentError::Other("No valid timestamp inherent in block".into())),
-		}.into().as_();
+		}.as_();
 
 		let minimum = (Self::now() + Self::block_period()).as_();
 		if t > data.as_() + MAX_TIMESTAMP_DRIFT {
@@ -239,7 +237,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -254,8 +252,8 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
-			let _ = Timestamp::dispatch(Call::set(70.into()), Origin::INHERENT);
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
+			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
 		});
 	}
 
@@ -269,7 +267,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46.into()), Origin::INHERENT);
+			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
 		});
 	}
 }

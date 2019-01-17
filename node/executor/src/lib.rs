@@ -329,7 +329,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42.into())),
+					function: Call::Timestamp(timestamp::Call::set(42)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
@@ -354,7 +354,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(52.into())),
+					function: Call::Timestamp(timestamp::Call::set(52)),
 				},
 				CheckedExtrinsic {
 					signed: Some((bob(), 0)),
@@ -377,7 +377,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42.into())),
+					function: Call::Timestamp(timestamp::Call::set(42)),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
@@ -636,7 +636,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42.into())),
+					function: Call::Timestamp(timestamp::Call::set(42)),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 0)),
