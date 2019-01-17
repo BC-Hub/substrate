@@ -20,7 +20,7 @@ pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
 #[cfg(feature = "std")]
 pub use std::fmt;
 pub use rstd::result;
-pub use codec::{Codec, Decode, Encode, Input, Output};
+pub use codec::{Codec, Decode, Encode, Input, Output, HasCompact, EncodeAsRef};
 pub use srml_metadata::{
 	ModuleMetadata, FunctionMetadata, DecodeDifferent,
 	CallMetadata, FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
@@ -170,7 +170,7 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident $(, $param_name:ident : $param:ty)*
+			$origin:ident $(, $(#[codec($codec_attr:ident)])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -184,7 +184,7 @@ macro_rules! decl_module {
 				$($t)*
 				$(#[doc = $doc_attr])*
 				$fn_vis fn $fn_name(
-					$origin $( , $param_name : $param )*
+					$origin $( , $(#[codec($codec_attr)])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
 			]
 			$($rest)*
@@ -199,7 +199,7 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			$origin:ident : T::Origin $(, $param_name:ident : $param:ty)*
+			$origin:ident : T::Origin $(, $(#[codec($codec_attr:ident)])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -218,7 +218,7 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			origin : $origin:ty $(, $param_name:ident : $param:ty)*
+			origin : $origin:ty $(, $(#[codec($codec_attr:ident)])* $param_name:ident : $param:ty)*
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -237,7 +237,7 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident(
-			$( $param_name:ident : $param:ty),*
+			$( $(#[codec($codec_attr:ident)])* $param_name:ident : $param:ty),*
 		) $( -> $result:ty )* { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
@@ -251,7 +251,7 @@ macro_rules! decl_module {
 				$($t)*
 				$(#[doc = $doc_attr])*
 				$fn_vis fn $fn_name(
-					root $( , $param_name : $param )*
+					root $( , $(#[codec($codec_attr)])* $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
 			]
 			$($rest)*
@@ -439,7 +439,7 @@ macro_rules! decl_module {
 			$(
 				$(#[doc = $doc_attr:tt])*
 				$fn_vis:vis fn $fn_name:ident(
-					$from:ident $( , $param_name:ident : $param:ty)*
+					$from:ident $( , $(#[codec($codec_attr:ident)])* $param_name:ident : $param:ty)*
 				) $( -> $result:ty )* { $( $impl:tt )* }
 			)*
 		}
@@ -481,6 +481,8 @@ macro_rules! decl_module {
 				$origin_type;
 				$from;
 				$fn_vis fn $fn_name (
+					// TODO: do we allow those meta here probbly not but so we have to enforce that
+					// meta are only for us, so it doesn't just disappear for user
 					$from $(, $param_name : $param )*
 				) $( -> $result )* { $( $impl )* }
 			}
@@ -571,17 +573,18 @@ macro_rules! decl_module {
 		impl<$trait_instance: $trait_name> $crate::dispatch::Decode for $call_type<$trait_instance> {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
 				let _input_id = input.read_byte()?;
-				__impl_decode!(input; _input_id; 0; $call_type; $( fn $fn_name( $( $param_name ),* ); )*)
+				__impl_decode!(input; _input_id; 0; $call_type; $( fn $fn_name( $( $(#[codec($codec_attr) for the type $param])* $param_name ),* ); )*)
 			}
 		}
 
 		impl<$trait_instance: $trait_name> $crate::dispatch::Encode for $call_type<$trait_instance> {
 			fn encode_to<W: $crate::dispatch::Output>(&self, _dest: &mut W) {
-				__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $param_name ),* ); )*);
+				__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $(#[codec($codec_attr) for the type $param])* $param_name ),* ); )*);
 				if let $call_type::__PhantomItem(_) = *self { unreachable!() }
 				if let $call_type::__OtherPhantomItem(_) = *self { unreachable!() }
 			}
 		}
+		// TODO: do we need to change this also ?
 		impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
 			for $call_type<$trait_instance>
 		{
@@ -608,11 +611,13 @@ macro_rules! decl_module {
 			type Call = $call_type<$trait_instance>;
 		}
 
+		// TODO: seems ok but not sure
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result {
 				d.dispatch(origin)
 			}
 		}
+		// TODO: what is it ? understand and do as such
 		__dispatch_impl_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
 			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*); )*}
@@ -629,14 +634,18 @@ macro_rules! __impl_decode {
 		$fn_id:expr;
 		$call_type:ident;
 		fn $fn_name:ident(
-			$( $param_name:ident ),*
+			$( $(#[codec($codec_attr:ident) for the type $param:ty])* $param_name:ident ),*
 		);
 		$($rest:tt)*
 	) => {
 		{
 			if $input_id == ($fn_id) {
 				$(
-					let $param_name = $crate::dispatch::Decode::decode($input)?;
+					__impl_decode!(@decode
+						$(#[codec($codec_attr) for the type $param])*
+						$param_name;
+						$input;
+					);
 				)*
 				return Some($call_type:: $fn_name( $( $param_name ),* ));
 			}
@@ -651,7 +660,28 @@ macro_rules! __impl_decode {
 		$call_type:ident;
 	) => {
 		None
-	}
+	};
+	(@decode
+		#[codec(compact) for the type $param:ty]
+		$param_name:ident;
+		$input:expr;
+	) => {
+		let $param_name = <<$param as $crate::dispatch::HasCompact>::Type as $crate::dispatch::Decode>::decode($input)?.into();
+	};
+	(@decode
+		$param_name:ident;
+		$input:expr;
+	) => {
+		let $param_name = $crate::dispatch::Decode::decode($input)?;
+	};
+	(@decode
+		$(#[codec($codec_attr:ident) for the type])*
+		$param_name:ident;
+		$input:expr;
+	) => {
+		// TODO better error message
+		compile_error!("Invalid codec attribute for parameter")
+	};
 }
 
 #[macro_export]
@@ -663,7 +693,7 @@ macro_rules! __impl_encode {
 		$fn_id:expr;
 		$call_type:ident;
 		fn $fn_name:ident(
-			$( $param_name:ident ),*
+			$( $(#[codec($codec_attr:ident) for the type $param:ty])* $param_name:ident ),*
 		);
 		$($rest:tt)*
 	) => {
@@ -675,7 +705,11 @@ macro_rules! __impl_encode {
 			) = $self {
 				$dest.push_byte(($fn_id) as u8);
 				$(
-					$param_name.encode_to($dest);
+					__impl_encode!(@encode_as
+						$(#[codec($codec_attr) for the type $param])*
+						$param_name;
+						$dest;
+					);
 				)*
 			}
 
@@ -687,7 +721,28 @@ macro_rules! __impl_encode {
 		$self:expr;
 		$fn_id:expr;
 		$call_type:ident;
-	) => {{}}
+	) => {{}};
+	(@encode_as
+		#[codec(compact) for the type $param:ty]
+		$param_name:ident;
+		$dest:expr;
+	) => {
+		<<$param as $crate::dispatch::HasCompact>::Type as $crate::dispatch::EncodeAsRef<$param>>::RefType::from($param_name).encode_to($dest);
+	};
+	(@encode_as
+		$param_name:ident;
+		$dest:expr;
+	) => {
+		$param_name.encode_to($dest);
+	};
+	(@encode_as
+		$(#[codec($codec_attr:ident) for the type $param:ty])*
+		$param_name:ident;
+		$dest:expr;
+	) => {
+		// TODO better error message
+		compile_error!("Invalid codec attribute for parameter")
+	};
 }
 
 pub trait IsSubType<T: Callable> {
